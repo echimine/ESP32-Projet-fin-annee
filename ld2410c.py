@@ -12,14 +12,12 @@ class LD2410CState(SensorState):
         return "LD2410C: présence détectée" if self.detected else "LD2410C: aucune présence"
 
     def to_json(self):
-        return json.dumps({
-            "detected": self.detected
-        })
+        return json.dumps({"detected": self.detected})
 
 
 class LD2410CSensor(Sensor):
     def __init__(self, pin_num, on_presence=None, retrigger_ms=5000):
-        self._pin = Pin(pin_num, Pin.IN)
+        self._pin = Pin(pin_num, Pin.IN, Pin.PULL_DOWN)
         self._on_presence = on_presence
         self._retrigger_ms = retrigger_ms
         self._last_trigger = 0
@@ -31,15 +29,10 @@ class LD2410CSensor(Sensor):
 
         if val == 1:
             self.state = LD2410CState(True)
-
-            elapsed = time.ticks_diff(now, self._last_trigger)
-
-            if elapsed >= self._retrigger_ms:
+            if time.ticks_diff(now, self._last_trigger) >= self._retrigger_ms:
                 self._last_trigger = now
-
                 if self._on_presence:
                     self._on_presence()
-
         else:
             self.state = LD2410CState(False)
 

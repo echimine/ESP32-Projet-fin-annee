@@ -1,5 +1,6 @@
 from sensor import Sensor, SensorState
 from machine import Pin
+import time
 
 class PIRState(SensorState):
     def __init__(self, detected):
@@ -13,19 +14,23 @@ class PIRState(SensorState):
         return json.dumps({"detected": self.detected})
 
 class PIRSensor(Sensor):
-    def __init__(self, pin_num, on_motion=None):
-        self._pin = Pin(pin_num, Pin.IN)
+    def __init__(self, pin_num, on_motion=None, retrigger_ms=2000):
+        self._pin = Pin(pin_num, Pin.IN, Pin.PULL_DOWN)
         self._on_motion = on_motion
-        self._last = 0
+        self._retrigger_ms = retrigger_ms
+        self._last_trigger = 0
         self.state = PIRState(False)
 
     def read(self):
         val = self._pin.value()
-        if val == 1 and self._last == 0:
+        now = time.ticks_ms()
+        if val == 1:
             self.state = PIRState(True)
-            if self._on_motion:
-                self._on_motion()
-        elif val == 0:
+            if time.ticks_diff(now, self._last_trigger) >= self._retrigger_ms:
+                self._last_trigger = now
+                print("[PIR] Mouvement détecté")
+                if self._on_motion:
+                    self._on_motion()
+        else:
             self.state = PIRState(False)
-        self._last = val
         return self.state

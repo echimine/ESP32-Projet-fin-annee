@@ -124,18 +124,8 @@ def on_close():
     leds_off()
 
 
-# === CALLBACK PIR ===
-def on_motion():
-    trigger_motion("PIR")
 
 # === INIT ===
-pir = PIRSensor(PIR_PIN, on_motion=on_motion)
-
-radar = LD2410CSensor(
-    RADAR_PIN,
-    on_presence=lambda: trigger_motion("LD2410C")
-)
-
 ws = WSClient(
     WS_URL,
     on_message=on_message,
@@ -143,8 +133,13 @@ ws = WSClient(
     on_close=on_close
 )
 
+radar = LD2410CSensor(
+    RADAR_PIN,
+    on_presence=lambda: trigger_motion("LD2410C"),
+    retrigger_ms=5000
+)
+
 o = Orchestrator(verbose=False) \
-    .add_sensor(pir) \
     .add_sensor(radar)
 
 print("[SYSTEM] Programme démarré")
@@ -154,30 +149,25 @@ print("[RADAR] Lecture sur GPIO", RADAR_PIN)
 # === BOUCLE PRINCIPALE ===
 while True:
     # Poll WebSocket
-    for _ in range(10):
-        if ws.poll() is None:
-            break
+    ws.poll()
 
     # Lecture des capteurs via orchestrator
-    # Cela lit le PIR et le LD2410C
     o.update()
+
+    now = time.ticks_ms()
 
     # Fin de la détection active après ACTIVE_MS
     if _motion_active:
-        elapsed_motion = time.ticks_diff(time.ticks_ms(), _motion_t0)
-
-        if elapsed_motion >= ACTIVE_MS:
+        if time.ticks_diff(now, _motion_t0) >= ACTIVE_MS:
             _motion_active = False
             _cooldown_active = True
-            _cooldown_t0 = time.ticks_ms()
-
+            _cooldown_t0 = now
             leds_off()
 
     # Fin du cooldown
     if _cooldown_active:
-        elapsed_cooldown = time.ticks_diff(time.ticks_ms(), _cooldown_t0)
-
-        if elapsed_cooldown >= COOLDOWN_MS:
+        if time.ticks_diff(now, _cooldown_t0) >= COOLDOWN_MS:
             _cooldown_active = False
+            print("[SYSTEM] Prêt à détecter")
 
     time.sleep(0.01)
